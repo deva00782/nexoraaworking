@@ -1,0 +1,30 @@
+import { createStart, createMiddleware, createCsrfMiddleware } from "@tanstack/react-start";
+import { attachSupabaseAuth } from "./integrations/supabase/auth-attacher";
+import { renderErrorPage } from "./lib/error-page";
+
+// 1. CSRF Protection for Server Functions
+const csrfMiddleware = createCsrfMiddleware({
+  filter: (ctx) => ctx.handlerType === "serverFn",
+});
+
+// 2. SSR Error Page Handler
+const errorMiddleware = createMiddleware().server(async ({ next }) => {
+  try {
+    return await next();
+  } catch (error) {
+    if (error != null && typeof error === "object" && "statusCode" in error) {
+      throw error;
+    }
+    console.error(error);
+    return new Response(renderErrorPage(), {
+      status: 500,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  }
+});
+
+// 3. Register both middleware + keep Supabase Auth
+export const startInstance = createStart(() => ({
+  requestMiddleware: [errorMiddleware, csrfMiddleware],
+  functionMiddleware: [attachSupabaseAuth],
+}));
